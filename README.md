@@ -1,4 +1,6 @@
 # sqlalchemy-challenge
+![Surf](https://github.com/user-attachments/assets/1f30d0b2-dbfd-40c1-a90b-6bf14e09b028)
+
 # Introduction
 
 You've decided to treat yourself to a long holiday vacation in Honolulu, Hawaii. 
@@ -27,7 +29,9 @@ SQLAlchemy (Hawaii.sqlite) were provided.
       column names.
    4. Sort the DataFrame values by "date".
    5. Plot the results by using the DataFrame plot method.
-   6. Use Pandas to print the summary statistics for the precipitation data.
+      ![Precipitation_Plot](https://github.com/user-attachments/assets/22a54157-410a-490f-af76-b8f77bf58fba)
+
+   7. Use Pandas to print the summary statistics for the precipitation data.
       
 # Station Analysis
 
@@ -44,8 +48,11 @@ SQLAlchemy (Hawaii.sqlite) were provided.
       o Filter by the station that has the greatest number of observations.
       o Query the previous 12 months of TOBS data for that station.
       o Plot the results as a histogram with bins=12
-      
+      ![Temp_observed_USC00519281](https://github.com/user-attachments/assets/a26f6cd7-3500-4972-87f4-365398136f3e)
+
 # Part 2: Design Your Climate App
+![Climate_app](https://github.com/user-attachments/assets/b6939ad0-f76b-41cb-a97a-2d633e2cd0a9)
+
 # Instructions 
 
 Design a Flask API based on the queries that was just developed. 
