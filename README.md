@@ -7,7 +7,7 @@ You've decided to treat yourself to a long holiday vacation in Honolulu, Hawaii.
 To help with your trip planning, you decide to do a climate analysis about 
 the area. 
 
-# Analysing and Exploring the Climate Data
+# Analyzing and Exploring the Climate Data
 
 Python and SQLAlchemy were used to do a basic climate analysis and data exploration 
 of the climate database. SQLAlchemy ORM queries, Pandas, and Matplotlib were 
