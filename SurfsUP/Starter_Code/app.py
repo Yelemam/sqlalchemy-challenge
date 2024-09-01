@@ -1,11 +1,13 @@
+# Import the dependencies.
 import numpy as np
+import pandas as pd
+import datetime as dt
 
 import sqlalchemy
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import Session
-from sqlalchemy import create_engine, func, distinct
-
-from flask import Flask, jsonify
+from sqlalchemy import create_engine, func
+from flask import Flask, jsonify, render_template_string, request, redirect, url_for
 
 #################################################
 # Database Setup
@@ -15,11 +17,11 @@ engine = create_engine("sqlite:///Resources/hawaii.sqlite")
 # reflect an existing database into a new model
 Base = automap_base()
 # reflect the tables
-Base.prepare(engine, reflect=True)
+Base.prepare(autoload_with=engine)
 
-# Save reference to the table
-measurement = Base.classes.measurement
-station = Base.classes.station
+# Save references to each table
+Measurement = Base.classes.measurement
+Station = Base.classes.station
 
 #################################################
 # Flask Setup
@@ -29,136 +31,181 @@ app = Flask(__name__)
 #################################################
 # Flask Routes
 #################################################
-
-@app.route("/")
+@app.route("/", methods=['GET', 'POST'])
 def welcome():
     """List all available api routes."""
-    return (
-        f"Available Routes for Hawaii Weather Data:<br/><br>"
-        f"-- Daily Precipitation Totals for Last Year: <a href=\"/api/v1.0/precipitation\">/api/v1.0/precipitation<a><br/>"
-        f"-- Active Weather Stations: <a href=\"/api/v1.0/stations\">/api/v1.0/stations<a><br/>"
-        f"-- Daily Temperature Observations for Station USC00519281 for Last Year: <a href=\"/api/v1.0/tobs\">/api/v1.0/tobs<a><br/>"
-        f"-- Min, Average & Max Temperatures for Date Range: <a href=\"/api/v1.0/trip/yyyy-mm-dd/yyyy-mm-dd\">/api/v1.0/trip/yyyy-mm-dd/yyyy-mm-dd</a><br>"
-    )
+    if request.method == 'POST':
+        if 'start_date' in request.form:
+            start_date = request.form['start_date']
+            return redirect(url_for('stats', start=start_date))
+        elif 'range_start_date' in request.form and 'range_end_date' in request.form:
+            start_date = request.form['range_start_date']
+            end_date = request.form['range_end_date']
+            return redirect(url_for('stats', start=start_date, end=end_date))
+
+    return render_template_string("""
+    <html>
+        <head>
+            <title>Climate App API</title>
+            <style>
+                h1 {
+                    text-align: center;
+                    background-color: #4CAF50;
+                    color: yellow;
+                    padding: 20px;
+                    margin-top: 0;
+                }
+                
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: lightblue;
+                }
+                .container {
+                    width: 80%;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                p {
+                    background-color: #4CAF50;
+                    color: yellow;
+                    margin:  auto;
+                    padding: 20px;
+                    width: 30%;
+                    text-align: center;
+                    font-size: 16px;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Welcome to the Climate App API!</h1>
+            <div class="container">
+                <h2>Available Routes:</h2>
+                <ul>
+                    <li><a href="{{ url_for('precipitation') }}">Daily Precipitation Totals for The Target Year</a></li>
+                    <li><a href="{{ url_for('stations') }}">List of Weather Stations</a></li>
+                    <li><a href="{{ url_for('tobs') }}">Temperature Observations for The Most Active Station</a></li>
+                    <li>
+                        Temperature Statistics for a given Date:
+                        <form method="POST">
+                            <input type="date" name="start_date" required>
+                            <input type="submit" value="Get Data">
+                        </form>
+                    </li>
+                    <li>
+                        Temperature Statistics for Date Range:
+                        <form method="POST">
+                            <input type="date" name="range_start_date" required>
+                            <input type="date" name="range_end_date" required>
+                            <input type="submit" value="Get Data">
+                        </form>
+                    </li>
+                </ul>
+            </div>
+            <footer>
+                <p>Yara El Emam, Copyrights 2024</p>
+            </footer>
+        </body>
+    </html>
+    """)
+
 
 @app.route("/api/v1.0/precipitation")
 def precipitation():
-    # Creating  session from Python to the DB
+    # Create our session (link) from Python to the DB
     session = Session(engine)
 
-    """Return a list of all daily precipitation totals for the last year"""
-    # Query and summarize daily precipitation across all stations for the last year of available data
-    
-    start_date = '2016-08-23'
-    sel = [measurement.date,
-        func.sum(measurement.prcp)]
-    precipitation = session.query(*sel).\
-            filter(measurement.date >= start_date).\
-            group_by(measurement.date).\
-            order_by(measurement.date).all()
-   
+    # Calculate the date 1 year from the last data point in the database
+    most_recent_date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()[0]
+    one_year_ago = dt.datetime.strptime(most_recent_date, "%Y-%m-%d") - dt.timedelta(days=365)
+
+    # Query for the date and precipitation for the last year
+    results = session.query(Measurement.date, Measurement.prcp).\
+        filter(Measurement.date >= one_year_ago).\
+        order_by(Measurement.date).all()
+
     session.close()
 
-    # Return a dictionary with the date as key and the daily precipitation total as value
-    precp_dates = []
-    precp_total = []
+    # Convert the query results to a dictionary
+    precipitation_dict = {date: prcp for date, prcp in results}
 
-    for date, dailytotal in precipitation:
-        precp_dates.append(date)
-        precp_total.append(dailytotal)
-    
-    precp_dict = dict(zip(precp_dates, precp_total))
-
-    return jsonify(precp_dict)
+    return jsonify(precipitation_dict)
 
 @app.route("/api/v1.0/stations")
 def stations():
-    # Creating session from Python to the DB
+    # Create our session (link) from Python to the DB
     session = Session(engine)
 
-    """Return a list of all the active Weather stations in Hawaii"""
-    # Return a list of active weather stations in Hawaii
-    sel = [measurement.station]
-    active_stations = session.query(*sel).\
-        group_by(measurement.station).all()
+    # Query all stations
+    results = session.query(Station.station).all()
+
     session.close()
 
-   
-    # Convert list into normal list and return the JSonified list
-    
-    list_of_stations = list(np.ravel(active_stations))
-    return jsonify(list_of_stations)
+    # Convert list of tuples into normal list
+    stations = list(np.ravel(results))
 
-   
+    return jsonify(stations)
+
 @app.route("/api/v1.0/tobs")
 def tobs():
-    # Creating session from Python to the DB
+    # Create our session (link) from Python to the DB
     session = Session(engine)
-    # Query the last 12 months of temperature observation data for the most active station
-    start_date = '2016-08-23'
-    most_active_station = 'USC00519281'
-    sel = [measurement.date,
-        measurement.tobs]
-    station_temps = session.query(*sel).\
-            filter(measurement.date >= start_date, measurement.station == most_active_station).\
-            group_by(measurement.date).\
-            order_by(measurement.date).all()
+
+    # Calculate the date 1 year ago from the last data point in the database
+    most_recent_date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()[0]
+    one_year_ago = dt.datetime.strptime(most_recent_date, "%Y-%m-%d") - dt.timedelta(days=365)
+
+    # Find the most active station
+    most_active_station = session.query(Measurement.station, func.count(Measurement.station).label('count')).\
+        group_by(Measurement.station).\
+        order_by(func.count(Measurement.station).desc()).first()
+
+    # Get the station name
+    station_name = session.query(Station.name).\
+        filter(Station.station == most_active_station.station).first()
+
+    # Query the primary station for all tobs from the last year
+    results = session.query(Measurement.tobs).\
+        filter(Measurement.station == most_active_station.station).\
+        filter(Measurement.date >= one_year_ago).all()
 
     session.close()
 
-    # Return a dictionary with the date as key and the daily temperature observation as value
-    obs_dates = []
-    temp_obs = []
-
-    for date, obs in station_temps:
-        obs_dates.append(date)
-        temp_obs.append(obs)
-    
-    most_active_tobs_dict = dict(zip(obs_dates, temp_obs))
-
-    return jsonify(most_active_tobs_dict)
-
-
-@app.route("/api/v1.0/trip/<start_date>")
-def trip1(start_date):
-    # Calculate minimum, average, and maximum temperatures from the start date onward.
-    session = Session(engine)
-    query_result = session.query(func.min(measurement.tobs), func.avg(measurement.tobs), func.max(measurement.tobs)).\
-        filter(measurement.date >= start_date).all()
-    session.close()
+    # Convert list of tuples into normal list
+    temps = list(np.ravel(results))
 
     # Prepare the response
-    if query_result and query_result[0][0] is not None:  # Check if the result is not empty and not None
-        min_temp, avg_temp, max_temp = query_result[0]
-        trip_stats = {
-            "Min": min_temp,
-            "Average": avg_temp,
-            "Max": max_temp
-        }
-        return jsonify(trip_stats)
-    else:
-        return jsonify({"error": f"Date {start_date} not found or not formatted as YYYY-MM-DD."}), 404
+    response = {
+        "station_id": most_active_station.station,
+        "station_name": station_name[0] if station_name else "Unknown",
+        "temperature_observations": temps
+    }
 
-@app.route("/api/v1.0/trip/<start_date>/<end_date>")
-def trip2(start_date, end_date):
-
-    # Calculate minimum, average, and maximum temperatures for the specified date range.
+    return jsonify(response)
+@app.route("/api/v1.0/<start>")
+@app.route("/api/v1.0/<start>/<end>")
+def stats(start, end=None):
+    # Create our session (link) from Python to the DB
     session = Session(engine)
-    query_result = session.query(func.min(measurement.tobs), func.avg(measurement.tobs), func.max(measurement.tobs)).\
-        filter(measurement.date >= start_date).filter(measurement.date <= end_date).all()
+
+    # Select statement
+    sel = [func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)]
+
+    if not end:
+        results = session.query(*sel).\
+            filter(Measurement.date >= start).all()
+    else:
+        results = session.query(*sel).\
+            filter(Measurement.date >= start).\
+            filter(Measurement.date <= end).all()
+
     session.close()
 
-    # Prepare the response
-    if query_result and query_result[0][0] is not None:  # Check if the result is not empty and not None
-        min_temp, avg_temp, max_temp = query_result[0]
-        trip_stats = {
-            "Min": min_temp,
-            "Average": avg_temp,
-            "Max": max_temp
-        }
-        return jsonify(trip_stats)
-    else:
-        return jsonify({"error": f"Date(s) not found, invalid date range, or dates not formatted correctly."}), 404
+    # Convert list of tuples into normal list
+    temps = list(np.ravel(results))
+
+    return jsonify({"TMIN": temps[0], "TAVG": temps[1], "TMAX": temps[2]})
 
 if __name__ == '__main__':
     app.run(debug=True)
