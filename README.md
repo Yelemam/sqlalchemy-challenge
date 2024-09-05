@@ -56,7 +56,7 @@ SQLAlchemy (Hawaii.sqlite) were provided.
 # Instructions 
 
 Design a Flask API based on the queries that was just developed. 
-To do so, use Flask to create routes as follows I have also used html to beautify my webpage:
+To do so, use Flask to create routes as follows I have also used html to beautify my webpage and make it user interactive:
 
     1.    / (Homepage)
        o    Start at the homepage.
